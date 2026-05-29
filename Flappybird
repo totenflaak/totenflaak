@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+<meta charset="UTF-8">
+<title>Flappy Bird</title>
+<style>
+    body {
+        margin: 0;
+        padding: 0;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        background: #000;
+        font-family: Arial, sans-serif;
+    }
+    #game-container {
+        position: relative;
+    }
+    canvas {
+        border: 4px solid #000;
+        box-shadow: 0 0 20px rgba(0,0,0,0.8);
+    }
+    #score {
+        position: absolute;
+        top: 30px;
+        left: 50%;
+        transform: translateX(-50%);
+        color: white;
+        font-size: 50px;
+        font-weight: bold;
+        text-shadow: 3px 3px 0 #000,
+                    -3px -3px 0 #000,
+                    3px -3px 0 #000,
+                    -3px 3px 0 #000;
+        pointer-events: none;
+        z-index: 10;
+    }
+    #start-screen {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        color: white;
+        text-align: center;
+        z-index: 20;
+        font-size: 28px;
+        text-shadow: 2px 2px 0 #000;
+    }
+</style>
+</head>
+<body>
+
+<div id="game-container">
+    <canvas id="canvas" width="288" height="512"></canvas>
+    <div id="score">0</div>
+    <div id="start-screen">
+        <h1>Flappy Bird</h1>
+        <p>Klikk eller trykk på mellomrom for å starte</p>
+    </div>
+</div>
+
+<script>
+// =============== FLAPPY BIRD ===============
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const scoreEl = document.getElementById('score');
+const startScreen = document.getElementById('start-screen');
+
+let birdY = 200;
+let birdVelocity = 0;
+const gravity = 0.5;
+const flapStrength = -11;
+let birdX = 60;
+let score = 0;
+let gameOver = false;
+let started = false;
+
+const pipeWidth = 52;
+const pipeGap = 130;
+let pipes = [];
+let frame = 0;
+
+// Bird animation
+let birdFrame = 0;
+
+// Load sounds (optional - works in most browsers)
+const flapSound = new Audio('https://www.soundjay.com/buttons/beep-07.mp3');
+const scoreSound = new Audio('https://www.soundjay.com/buttons/beep-08.mp3');
+const hitSound = new Audio('https://www.soundjay.com/misc/sounds/fail-01.mp3');
+
+// Keyboard & mouse/touch
+document.addEventListener('keydown', e => {
+    if (e.code === 'Space') {
+        flap();
+    }
+});
+
+canvas.addEventListener('click', flap);
+canvas.addEventListener('touchstart', e => {
+    e.preventDefault();
+    flap();
+});
+
+function flap() {
+    if (!started) {
+        started = true;
+        startScreen.style.display = 'none';
+        resetGame();
+    }
+    if (!gameOver) {
+        birdVelocity = flapStrength;
+        flapSound.currentTime = 0;
+        flapSound.play().catch(() => {});
+    } else {
+        // Restart
+        resetGame();
+    }
+}
+
+function resetGame() {
+    birdY = 200;
+    birdVelocity = 0;
+    score = 0;
+    scoreEl.textContent = '0';
+    pipes = [];
+    gameOver = false;
+    frame = 0;
+}
+
+function createPipe() {
+    const minHeight = 80;
+    const maxHeight = 300;
+    const topHeight = Math.floor(Math.random() * (maxHeight - minHeight) + minHeight);
+    
+    pipes.push({
+        x: canvas.width,
+        top: topHeight,
+        passed: false
+    });
+}
+
+function update() {
+    if (!started || gameOver) return;
+
+    frame++;
+
+    // Bird physics
+    birdVelocity += gravity;
+    birdY += birdVelocity;
+
+    // Create pipes
+    if (frame % 90 === 0) {
+        createPipe();
+    }
+
+    // Update pipes
+    for (let i = 0; i < pipes.length; i++) {
+        const p = pipes[i];
+        p.x -= 2;
+
+        // Score
+        if (!p.passed && p.x + pipeWidth < birdX) {
+            p.passed = true;
+            score++;
+            scoreEl.textContent = score;
+            scoreSound.currentTime = 0;
+            scoreSound.play().catch(() => {});
+        }
+
+        // Remove off-screen pipes
+        if (p.x < -pipeWidth) {
+            pipes.splice(i, 1);
+            i--;
+        }
+    }
+
+    // Collision detection
+    const birdSize = 24;
+    if (birdY < 0 || birdY + birdSize > canvas.height - 80) {
+        die();
+    }
+
+    for (let p of pipes) {
+        // Top pipe
+        if (
+            birdX + birdSize > p.x && 
+            birdX < p.x + pipeWidth && 
+            birdY < p.top
+        ) {
+            die();
+        }
+        // Bottom pipe
+        if (
+            birdX + birdSize > p.x && 
+            birdX < p.x + pipeWidth && 
+            birdY + birdSize > p.top + pipeGap
+        ) {
+            die();
+        }
+    }
+}
+
+function die() {
+    gameOver = true;
+    hitSound.currentTime = 0;
+    hitSound.play().catch(() => {});
+}
+
+function draw() {
+    // Background
+    ctx.fillStyle = '#71c5ee';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Pipes
+    ctx.fillStyle = '#5cb85c';
+    for (let p of pipes) {
+        // Top pipe
+        ctx.fillRect(p.x, 0, pipeWidth, p.top);
+        ctx.fillRect(p.x - 4, p.top - 30, pipeWidth + 8, 30); // top cap
+        
+        // Bottom pipe
+        const bottomY = p.top + pipeGap;
+        ctx.fillRect(p.x, bottomY, pipeWidth, canvas.height - bottomY);
+        ctx.fillRect(p.x - 4, bottomY, pipeWidth + 8, 30); // bottom cap
+    }
+
+    // Ground
+    ctx.fillStyle = '#8b4513';
+    ctx.fillRect(0, canvas.height - 60, canvas.width, 60);
+    ctx.fillStyle = '#deb887';
+    ctx.fillRect(0, canvas.height - 70, canvas.width, 10);
+
+    // Bird
+    ctx.save();
+    ctx.translate(birdX + 12, birdY + 12);
+    ctx.rotate(Math.min(Math.max(birdVelocity * 3, -30), 90) * Math.PI / 180);
+    
+    ctx.fillStyle = '#f9d71c';
+    ctx.fillRect(-12, -12, 24, 24);           // body
+    ctx.fillStyle = '#f00';
+    ctx.fillRect(6, -6, 12, 8);               // beak
+    ctx.fillStyle = '#000';
+    ctx.fillRect(-4, -6, 8, 8);               // eye
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(-2, -4, 4, 4);               // eye highlight
+    
+    ctx.restore();
+
+    // Game Over text
+    if (gameOver) {
+        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        ctx.fillStyle = 'white';
+        ctx.font = 'bold 32px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('Game Over', canvas.width/2, 180);
+        ctx.font = '22px Arial';
+        ctx.fillText(`Score: ${score}`, canvas.width/2, 230);
+        ctx.fillText('Klikk for å spille igjen', canvas.width/2, 280);
+    }
+}
+
+function gameLoop() {
+    update();
+    draw();
+    requestAnimationFrame(gameLoop);
+}
+
+gameLoop();
+</script>
+
+</body>
+</html>
